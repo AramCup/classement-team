@@ -55,7 +55,7 @@ jobs:
         env:
           GOOGLE_APPLICATION_CREDENTIALS: "${{ github.workspace }}/service-account.json"
           # Tu peux surcharger ici si besoin :
-          # SHEET_URL: "https://docs.google.com/spreadsheets/d/1ESiWCUnd0ndupA6WocooLcbB6qqf_gx4jShZ0K6Ef7Y"
+          SHEET_URL: "https://docs.google.com/spreadsheets/d/1ESiWCUnd0ndupA6WocooLcbB6qqf_gx4jShZ0K6Ef7Y"
           FONT_PATH: "Oswald-Medium.ttf"
           BASE_IMAGE_PATH: "classement.png"
           OUTPUT_PATH: "render.png"
