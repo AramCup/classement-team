@@ -2,7 +2,7 @@ name: Render Classement
 
 on:
   schedule:
-    - cron: "0 * * * *"    # Toutes les heures (UTC)
+    - cron: "* * * * *"    # Toutes les heures (UTC)
   workflow_dispatch:        # Lancer manuellement depuis GitHub
 
 jobs:
