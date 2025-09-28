@@ -2,60 +2,23 @@ name: Render Classement
 
 on:
   schedule:
-    - cron: "0 * * * *"   # toutes les heures (UTC)
+    - cron: "0 * * * *"
   workflow_dispatch:
+
+permissions:
+  contents: write   # ⬅️ autorise le push
 
 jobs:
   render:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          persist-credentials: true   # ⬅️ garde le token pour push
+          fetch-depth: 0              # ⬅️ nécessaire pour commit/push
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          else
-            pip install gspread==6.0.0 google-auth==2.34.0 google-auth-oauthlib==1.2.0 Pillow==10.3.0
-          fi
-
-      - name: Recreate service account file (from base64 secret)
-        run: |
-          echo "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON_B64 }}" | base64 -d > service-account.json
-          ls -la service-account.json
-
-      - name: List project files
-        run: |
-          ls -la
-          # (optionnel) montrer la taille des ressources
-          for f in render_classement.py classement.png Oswald-Medium.ttf; do
-            [ -f "$f" ] && stat -c "%n %s bytes" "$f" || echo "⚠️ $f introuvable"
-          done
-
-      - name: Run render script
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: "${{ github.workspace }}/service-account.json"
-          SHEET_URL: "https://docs.google.com/spreadsheets/d/1ESiWCUnd0ndupA6WocooLcbB6qqf_gx4jShZ0K6Ef7Y"
-          FONT_PATH: "Oswald-Medium.ttf"
-          BASE_IMAGE_PATH: "classement.png"
-          OUTPUT_PATH: "render.png"
-          DEBUG: "0"
-        run: python render_classement.py
-
-      - name: Upload artifact (render.png)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: classement-render
-          path: render.png
+      # ... (tes autres étapes identiques)
 
       - name: Commit render.png back to repo
         if: success()
