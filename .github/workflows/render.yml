@@ -2,8 +2,8 @@ name: Render Classement
 
 on:
   schedule:
-    - cron: "* * * * *"    # toutes les heures (UTC)
-  workflow_dispatch:
+    - cron: "0 * * * *"     # toutes les heures (UTC) — change si besoin
+  workflow_dispatch:         # bouton "Run workflow" manuel
 
 jobs:
   render:
@@ -21,10 +21,46 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          # Si requirements.txt est présent -> on l'utilise, sinon fallback install directe
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            pip install gspread==6.0.0 google-auth==2.34.0 google-auth-oauthlib==1.2.0 Pillow==10.3.0
+          fi
 
-      - name: Recreate service account file
-        run: echo "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}" > service-account.json
+      # 🔐 Recréation du fichier service-account.json depuis le secret BASE64
+      - name: Recreate service account file from base64 secret
+        shell: bash
+        run: |
+          if [ -z "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON_B64 }}" ]; then
+            echo "❌ Secret GOOGLE_APPLICATION_CREDENTIALS_JSON_B64 manquant. Va dans Settings > Secrets > Actions et ajoute-le."
+            exit 1
+          fi
+          echo "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON_B64 }}" | base64 -d > service-account.json
+          # Validation JSON (log propre si erreur)
+          python - <<'PY'
+import json, sys, pathlib
+p = pathlib.Path("service-account.json")
+try:
+  json.load(open(p, "r"))
+  print(f"✅ JSON valide ({p.stat().st_size} octets)")
+except Exception as e:
+  print("❌ JSON invalide:", e)
+  sys.exit(1)
+PY
+
+      - name: List files (sanity check)
+        run: |
+          pwd
+          ls -la
+          # Affiche la taille des ressources (si absentes, on le voit tout de suite)
+          for f in classement.png Oswald-Medium.ttf render_classement.py; do
+            if [ -f "$f" ]; then
+              stat -c "%n %s bytes" "$f"
+            else
+              echo "⚠️ $f introuvable"
+            fi
+          done
 
       - name: Run render script
         env:
@@ -33,11 +69,22 @@ jobs:
           FONT_PATH: "Oswald-Medium.ttf"
           BASE_IMAGE_PATH: "classement.png"
           OUTPUT_PATH: "render.png"
+          DEBUG: "0"
         run: python render_classement.py
 
-      - name: Upload artifact
-        if: always()
+      - name: Upload artifact (render.png)
+        if: always()   # on uploade même si le script a échoué (image de debug)
         uses: actions/upload-artifact@v4
         with:
           name: classement-render
           path: render.png
+
+      # (Optionnel) Commit de l'image dans le repo si tout est OK
+      - name: Commit render.png back to repo
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add render.png
+          git diff --quiet --cached || git commit -m "update render $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          git push
