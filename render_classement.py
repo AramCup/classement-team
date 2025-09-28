@@ -162,7 +162,7 @@ def main():
     def col_box(l_pct: float, r_pct: float, row_index: int) -> Tuple[int, int, int, int]:
         x0 = pct_to_px(l_pct, W)
         x1 = pct_to_px(r_pct, W)
-        band_top = (103 + 3) + row_index * (80 + 3)
+        band_top = (95 + 3) + row_index * (80 + 3)
         y0 = band_top + 30
         y1 = band_top + 80 - 30
         return (x0, y0, x1, y1)
@@ -199,3 +199,4 @@ if __name__ == "__main__":
         im.save("render.png")
         print("❌ Render failed. Debug image saved to render.png")
         raise
+
