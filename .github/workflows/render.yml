@@ -2,29 +2,94 @@ name: Render Classement
 
 on:
   schedule:
-    - cron: "0 * * * *"
-  workflow_dispatch:
+    - cron: "0 * * * *"   # toutes les heures (UTC)
+  workflow_dispatch:      # bouton "Run workflow"
 
+# Autorise les pushes via le GITHUB_TOKEN
 permissions:
-  contents: write   # ⬅️ autorise le push
+  contents: write
 
 jobs:
   render:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          persist-credentials: true   # ⬅️ garde le token pour push
-          fetch-depth: 0              # ⬅️ nécessaire pour commit/push
+          persist-credentials: true
+          fetch-depth: 0
 
-      # ... (tes autres étapes identiques)
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            pip install gspread==6.0.0 google-auth==2.34.0 google-auth-oauthlib==1.2.0 Pillow==10.3.0
+          fi
+
+      # 🔐 Recrée service-account.json depuis le secret base64
+      - name: Recreate service account file (from base64 secret)
+        run: |
+          if [ -z "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON_B64 }}" ]; then
+            echo "❌ Secret GOOGLE_APPLICATION_CREDENTIALS_JSON_B64 manquant."
+            exit 1
+          fi
+          echo "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON_B64 }}" | base64 -d > service-account.json
+          python - <<'PY'
+import json, sys
+try:
+  json.load(open("service-account.json","r"))
+  print("✅ JSON service-account valide")
+except Exception as e:
+  print("❌ JSON invalide:", e)
+  sys.exit(1)
+PY
+
+      - name: List project files
+        run: |
+          ls -la
+          for f in render_classement.py classement.png Oswald-Medium.ttf; do
+            if [ -f "$f" ]; then
+              stat -c "%n %s bytes" "$f"
+            else
+              echo "⚠️ $f introuvable"
+            fi
+          done
+
+      - name: Run render script
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: "${{ github.workspace }}/service-account.json"
+          SHEET_URL: "https://docs.google.com/spreadsheets/d/1ESiWCUnd0ndupA6WocooLcbB6qqf_gx4jShZ0K6Ef7Y"
+          FONT_PATH: "Oswald-Medium.ttf"
+          BASE_IMAGE_PATH: "classement.png"
+          OUTPUT_PATH: "render.png"
+          DEBUG: "0"
+        run: python render_classement.py
+
+      - name: Upload artifact (render.png)
+        if: always()         # uploade même si le script a échoué (image de debug)
+        uses: actions/upload-artifact@v4
+        with:
+          name: classement-render
+          path: render.png
+
+      # ✅ Commit uniquement si le fichier existe
       - name: Commit render.png back to repo
         if: success()
         run: |
+          if [ ! -f render.png ]; then
+            echo "render.png manquant, commit ignoré."
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add render.png
+          git add -f render.png
           git diff --quiet --cached || git commit -m "update render $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
           git push
